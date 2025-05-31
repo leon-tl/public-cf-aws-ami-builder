@@ -1,0 +1,37 @@
+---
+template:
+  path: infra.yaml.j2
+
+sceptre_user_data:
+  stack_description: Infrastructure Configuration Security Group for AMI building
+  infra:
+    - name: InfrastructureConfigurationSecurityGroup
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        VpcId: !rcmd |
+          aws ec2 describe-vpcs --query "Vpcs[0].VpcId" --output text
+        GroupDescription: Security Group used with Infrastructure Configuration for AMI building
+        GroupName: infrastructure-configuration-security-group
+        SecurityGroupEgress:
+          - Description: Default Outbound traffic
+            CidrIp: 0.0.0.0/0
+            FromPort: 1
+            ToPort: 65535
+            IpProtocol: "-1"
+        SecurityGroupIngress:
+          - Description: HTTP
+            CidrIp: 10.0.0.0/8
+            FromPort: 80
+            ToPort: 80
+            IpProtocol: tcp
+          - Description: HTTPS
+            CidrIp: 10.0.0.0/8
+            FromPort: 443
+            ToPort: 443
+            IpProtocol: tcp
+
+  infra_outputs:
+    - name: InfrastructureConfigurationSecurityGroup
+      Description: Security Group Id
+      Value:
+        Fn::GetAtt: [InfrastructureConfigurationSecurityGroup, GroupId]

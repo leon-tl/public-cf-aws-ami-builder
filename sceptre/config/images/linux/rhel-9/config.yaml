@@ -1,0 +1,8 @@
+---
+current_directory: images/linux/rhel-9
+image_name: RHEL9-Server-Base-Image
+ami_description: Red Het Enterprise 9 Server Base Image
+build_host_instance_type: t2.micro
+parent_image: red-hat-enterprise-linux-9-x86/x.x.x
+image_builder_platform: Linux
+image_pipeline_scheduler: cron(30 22 ? * tue#2 *)  # Run on the second Tuesday of every month at 10:30 PM (UTC)

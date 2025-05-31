@@ -1,0 +1,8 @@
+---
+current_directory: images/windows/server-2022
+image_name: Windows-2022-Server-Base-Image
+ami_description: Windows 2022 Server Base Image
+build_host_instance_type: t2.micro
+parent_image: windows-server-2022-english-full-base-x86/x.x.x
+image_builder_platform: Windows
+image_pipeline_scheduler: cron(30 22 ? * tue#2 *)  # Run on the second Tuesday of every month at 10:30 PM (UTC)

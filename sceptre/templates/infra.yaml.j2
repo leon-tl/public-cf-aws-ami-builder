@@ -1,0 +1,34 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: {{ sceptre_user_data.stack_description }}
+
+Resources:
+{%- for infra in sceptre_user_data.infra %}
+  {{ infra.name }}:
+    Type: {{ infra.Type }}
+{%- if infra.Metadata is defined %}
+    Metadata:
+{%- for key, value in infra.Metadata.items() %}
+      {{ key }}: {{ value }}
+{%- endfor %}
+{%- endif %}
+    Properties:
+{%- for key, value in infra.Properties.items() %}
+{%- if key == "Data" %}
+      {{ key }}: |
+{{ value | indent(7, true) }}
+{%- else %}
+      {{ key }}: {{ value }}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+
+{%- if sceptre_user_data.infra_outputs is defined %}
+Outputs:
+{%- for output in sceptre_user_data.infra_outputs %}
+  {{ output.name }}:
+{%- for key, value in output.items() if key != 'name' %}
+    {{ key }}: {{ value }}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}

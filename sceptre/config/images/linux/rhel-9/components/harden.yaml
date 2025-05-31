@@ -1,0 +1,14 @@
+---
+name: HardeningComponent
+description: Hardening Component
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: placeholder
+        action: ExecuteBash
+        onFailure: Abort
+        inputs:
+          commands:
+            - |
+              echo placeholder

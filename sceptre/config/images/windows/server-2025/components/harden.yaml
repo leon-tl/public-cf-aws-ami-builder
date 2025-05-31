@@ -1,0 +1,13 @@
+---
+name: HardeningComponent
+description: CIS baseline hardening component
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: placeholder
+        action: ExecutePowerShell
+        inputs:
+          commands:
+            - |
+              Write-Output "placeholder"

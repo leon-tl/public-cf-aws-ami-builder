@@ -1,0 +1,15 @@
+---
+project_code: aws-ami-bakery
+region: ap-southeast-2
+
+account_ids_to_share_ami: 123456789011, 123456789012, 123456789013
+
+# ec2
+key_pair: ami-builder
+
+# s3
+bucket_name: image-builder-artifacts
+bucket_versioning: Enabled
+
+# kms
+org_id: o-123456

@@ -1,0 +1,84 @@
+---
+template:
+  path: infra.yaml.j2
+
+sceptre_user_data:
+  stack_description: IAM Service Roles for Image Building
+  infra:
+    - name: InfrastructureConfigurationServiceRole
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - ec2.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Description: InfrastructureConfigurationServiceRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+          - arn:aws:iam::aws:policy/EC2InstanceProfileForImageBuilder
+          - arn:aws:iam::aws:policy/Ec2ImageBuilderCrossAccountDistributionAccess
+        RoleName: InfrastructureConfigurationServiceRole
+        Policies:
+          - PolicyName: S3AccessToBuildArtifacts
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:Get*
+                  Resource:
+                    - !stack_output infra/s3/bucket.yaml::S3BucketArn
+                    - Fn::Sub:
+                        - ${bucket_arn}/*
+                        - {
+                          bucket_arn: !stack_output infra/s3/bucket.yaml::S3BucketArn
+                        }
+          - PolicyName: PermissionsToRunBuild
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - ssm:SendCommand
+                    - ec2:CreateTags
+                    - ec2:Describe*
+                  Resource:
+                    - "*"
+
+    # - name: ImageBuilderLifecyclePolicyRole
+    #   Type: AWS::IAM::Role
+    #   Properties:
+    #     AssumeRolePolicyDocument:
+    #       Version: "2012-10-17"
+    #       Statement:
+    #         - Effect: Allow
+    #           Principal:
+    #             Service:
+    #               - imagebuilder.amazonaws.com
+    #           Action:
+    #             - sts:AssumeRole
+    #     Description: ImageBuilderLifecyclePolicyRole
+    #     ManagedPolicyArns:
+    #       - arn:aws:iam::aws:policy/service-role/EC2ImageBuilderLifecycleExecutionPolicy
+    #     RoleName: ImageBuilderLifecyclePolicyRole
+
+  infra_outputs:
+    - name: InfrastructureConfigurationServiceRoleId
+      Description: Id of the IAM Role
+      Value:
+        Ref: InfrastructureConfigurationServiceRole
+
+    - name: InfrastructureConfigurationServiceRoleArn
+      Description: ARN of the IAM Role
+      Value:
+        Fn::GetAtt: [InfrastructureConfigurationServiceRole, Arn]
+
+    # - name: ImageBuilderLifecyclePolicyRoleArn
+    #   Description: ARN of the IAM Role
+    #   Value:
+    #     Fn::GetAtt: [ImageBuilderLifecyclePolicyRole, Arn]

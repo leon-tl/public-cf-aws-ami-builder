@@ -1,0 +1,24 @@
+---
+template:
+  path: infra.yaml.j2
+
+sceptre_user_data:
+  stack_description: IAM Instance Profiles for Infrastructure Configuration
+  infra:
+    - name: InfrastructureConfiguration
+      Type: AWS::IAM::InstanceProfile
+      Properties:
+        InstanceProfileName: InfrastructureConfigurationInstanceProfile
+        Roles:
+          - !stack_output infra/iam/role.yaml::InfrastructureConfigurationServiceRoleId
+
+  infra_outputs:
+    - name: InfrastructureConfigurationServiceRoleInstanceProfileId
+      Description: Id of Instance Profile
+      Value:
+        Ref: InfrastructureConfiguration
+
+    # - name: InfrastructureConfigurationServiceRoleInstanceProfileArn
+    #   Description: Arn of Instance Profile
+    #   Value:
+    #     Fn::GetAtt: [InfrastructureConfiguration, Arn]

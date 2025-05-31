@@ -1,0 +1,14 @@
+---
+name: BuildComponent
+description: Build Component
+schemaVersion: 1.0
+phases:
+  - name: build
+    steps:
+      - name: set-timezone
+        action: ExecuteBash
+        onFailure: Abort
+        inputs:
+          commands:
+            - |
+              timedatectl set-timezone Australia/Sydney

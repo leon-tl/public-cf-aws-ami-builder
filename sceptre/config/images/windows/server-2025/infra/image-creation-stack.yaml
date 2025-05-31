@@ -1,0 +1,215 @@
+---
+template:
+  path: infra.yaml.j2
+
+hooks:
+  before_launch:
+    - !cmd |
+        bucket_name=$(aws cloudformation describe-stacks \
+          --stack-name "{{ project_code }}-infra-s3-bucket" \
+          --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+          --output text)
+        aws s3 cp "config/{{ current_directory }}/components/build.yaml" "s3://$bucket_name/components/{{ image_name }}/build.yaml"
+    - !cmd |
+        bucket_name=$(aws cloudformation describe-stacks \
+          --stack-name "{{ project_code }}-infra-s3-bucket" \
+          --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+          --output text)
+        aws s3 cp "config/{{ current_directory }}/components/harden.yaml" "s3://$bucket_name/components/{{ image_name }}/harden.yaml"
+
+  # after_launch:
+  #   - !cmd
+  #       run: |
+  #         #!/bin/bash
+  #         set -e
+
+  #         stack_name="{{ project_code }}-{{ current_directory }}-infra-image-creation-stack"
+  #         stack_name_edited="${stack_name//\//-}"
+
+  #         pipeline_arn=$(aws cloudformation describe-stacks \
+  #           --stack-name "$stack_name_edited" \
+  #           --query "Stacks[0].Outputs[?OutputKey=='ImagePipelineArn'].OutputValue" \
+  #           --output text)
+
+  #         aws imagebuilder start-image-pipeline-execution --image-pipeline-arn "$pipeline_arn"
+  #       shell: bash
+
+sceptre_user_data:
+  stack_description: "Image Creation stack for {{ image_name }}"
+  infra:
+    - name: DistributionConfiguration
+      Type: AWS::ImageBuilder::DistributionConfiguration
+      Properties:
+        Description: "Distribution Configuration for {{ image_name }}"
+        Distributions:
+          - Region: "{{ region }}"
+            AmiDistributionConfiguration:
+              Name:
+                Fn::Sub:
+                  - "{{ image_name }}-${image_build_date}-${image_build_version}"
+                  - {
+                    image_build_date: "{% raw %}{{ imagebuilder:buildDate }}{% endraw %}",
+                    image_build_version: "{% raw %}{{ imagebuilder:buildVersion }}{% endraw %}"
+                  }
+              Description: "{{ ami_description }}"
+              LaunchPermissionConfiguration:
+                UserIds: [{{ account_ids_to_share_ami }}]
+        Name: "{{ image_name }}-distribution-configuration"
+        # Tags:
+        #   Key: Value
+
+    - name: InfrastructureConfiguration
+      Type: AWS::ImageBuilder::InfrastructureConfiguration
+      Properties:
+        Description: "Infrastructure Configuration for {{ image_name }}"
+        InstanceMetadataOptions:
+          HttpPutResponseHopLimit: 2
+          HttpTokens: required
+        InstanceProfileName: !stack_output infra/iam/instance-profile.yaml::InfrastructureConfigurationServiceRoleInstanceProfileId
+        InstanceTypes:
+          - "{{ build_host_instance_type }}"
+        KeyPair: "{{ key_pair }}"
+        Name: "{{ image_name }}-infrastructure-configuration"
+        SecurityGroupIds:
+          - !stack_output infra/ec2/security-group.yaml::InfrastructureConfigurationSecurityGroup
+        # SnsTopicArn: String
+        SubnetId: !stack_output_external aws-account-setup-aws-accounts-build-network-subnet::PublicASubnetId
+        # Tags:
+        #   Key: Value
+        TerminateInstanceOnFailure: false
+
+    - name: ImagePipeline
+      Type: AWS::ImageBuilder::ImagePipeline
+      Properties:
+        Description: "Image Pipeline for {{ image_name }}"
+        DistributionConfigurationArn:
+          Fn::GetAtt: [DistributionConfiguration, Arn]
+        ImageRecipeArn:
+          Fn::GetAtt: [ImageRecipe, Arn]
+        ImageTestsConfiguration:
+          ImageTestsEnabled: true
+          TimeoutMinutes: 60
+        InfrastructureConfigurationArn:
+          Fn::GetAtt: [InfrastructureConfiguration, Arn]
+        Name: "{{ image_name }}-image-pipeline"
+        Schedule:
+          PipelineExecutionStartCondition: EXPRESSION_MATCH_ONLY
+          ScheduleExpression: "{{ image_pipeline_scheduler }}"
+        Status: ENABLED
+        # Tags:
+        #   Key: Value
+
+    - name: ImageRecipe
+      DeletionPolicy: Retain
+      Type: AWS::ImageBuilder::ImageRecipe
+      Properties:
+        BlockDeviceMappings:
+          - DeviceName: /dev/sda1
+            Ebs:
+              DeleteOnTermination: true
+              Encrypted: true
+              KmsKeyId: !stack_output infra\kms\key.yaml::KMSKeyId
+              VolumeSize: 40
+              VolumeType: gp3
+          # - DeviceName: /dev/xvdb
+          #   Ebs:
+          #     DeleteOnTermination: true
+          #     Encrypted: true
+          #     KmsKeyId: !stack_output infra\kms\key.yaml::KMSKeyId
+          #     VolumeSize: 20
+          #     VolumeType: gp3
+        Components:
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/aws-cli-version-2-windows/x.x.x
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/amazon-cloudwatch-agent-windows/x.x.x
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/aws-codedeploy-agent-windows/x.x.x
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/powershell-lts-windows/x.x.x
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/putty/x.x.x
+          - ComponentArn:
+              Ref: ImageBuilderComponentBuild
+          - ComponentArn:
+              Ref: ImageBuilderComponentHarden
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/update-windows/x.x.x
+          - ComponentArn:
+              Fn::Sub: arn:aws:imagebuilder:${AWS::Region}:aws:component/reboot-windows/x.x.x
+        Description: "Image Recipe for {{ image_name }}"
+        Name: "{{ image_name }}-image-recipe"
+        ParentImage:
+          Fn::Sub:
+            - arn:aws:imagebuilder:${AWS::Region}:aws:image/${image_name}
+            - {
+              image_name: "{{ parent_image }}"
+            }
+        # Tags:
+        #   Key: Value
+        Version: !rcmd date "+%Y.%m.%d%H%M"
+
+    - name: ImageBuilderComponentHarden
+      # DeletionPolicy: Retain
+      Type: AWS::ImageBuilder::Component
+      Properties:
+        Description: "Image Builder Harden Component for {{ image_name }}"
+        Name: "{{ image_name }}-image-builder-component-harden"
+        Platform: "{{ image_builder_platform }}"
+        # Tags:
+        #   Key: Value
+        Uri: !rcmd |
+          bucket_name=$(aws cloudformation describe-stacks \
+            --stack-name "{{ project_code }}-infra-s3-bucket" \
+            --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+            --output text) && \
+          echo "s3://$bucket_name/components/{{ image_name }}/harden.yaml"
+        Version: !rcmd date "+%Y.%m.%d%H%M"
+
+    - name: ImageBuilderComponentBuild
+      # DeletionPolicy: Retain
+      Type: AWS::ImageBuilder::Component
+      Properties:
+        Description: "Image Builder Build Component for {{ image_name }}"
+        Name: "{{ image_name }}-image-builder-component-build"
+        Platform: "{{ image_builder_platform }}"
+        # Tags:
+        #   Key: Value
+        Uri: !rcmd |
+          bucket_name=$(aws cloudformation describe-stacks \
+            --stack-name "{{ project_code }}-infra-s3-bucket" \
+            --query "Stacks[0].Outputs[?OutputKey=='S3BucketName'].OutputValue" \
+            --output text) && \
+          echo "s3://$bucket_name/components/{{ image_name }}/build.yaml"
+        Version: !rcmd date "+%Y.%m.%d%H%M"
+
+  infra_outputs:
+    - name: DistributionConfigurationArn
+      Description: Arn of Distribution Configuration
+      Value:
+        Fn::GetAtt: [DistributionConfiguration, Arn]
+
+    - name: InfrastructureConfigurationArn
+      Description: Arn of InfrastructureConfiguration
+      Value:
+        Fn::GetAtt: [InfrastructureConfiguration, Arn]
+
+    - name: ImageRecipeArn
+      Description: Arn of Image Recipe
+      Value:
+        Fn::GetAtt: [ImageRecipe, Arn]
+
+    - name: ImageBuilderComponentHardenArn
+      Description: Arn for ImageBuilderComponentHarden
+      Value:
+        Ref: ImageBuilderComponentHarden
+
+    - name: ImageBuilderComponentBuildArn
+      Description: Arn for ImageBuilderComponentBuild
+      Value:
+        Ref: ImageBuilderComponentBuild
+
+    - name: ImagePipelineArn
+      Description: Arn of ImagePipeline
+      Value:
+        Ref: ImagePipeline

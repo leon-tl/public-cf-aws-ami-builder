@@ -1,0 +1,56 @@
+---
+template:
+  path: infra.yaml.j2
+
+sceptre_user_data:
+  stack_description: S3 bucket to store artifacts for AMI building
+  infra:
+    - name: S3Bucket
+      DeletionPolicy: Delete
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - BucketKeyEnabled: true
+              ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        BucketName:
+          Fn::Sub: "${AWS::AccountId}-{{ bucket_name }}"
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          IgnorePublicAcls: true
+          BlockPublicPolicy: true
+          RestrictPublicBuckets: true
+        VersioningConfiguration:
+          Status: "{{ bucket_versioning }}"
+
+    - name: S3BucketPolicy
+      DeletionPolicy: Delete
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: S3Bucket
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Sid: EnforceSSL
+              Effect: Deny
+              Principal: "*"
+              Action: s3:*
+              Resource:
+                - Fn::Sub: "${S3Bucket.Arn}"
+                - Fn::Sub: "${S3Bucket.Arn}/*"
+              Condition:
+                Bool:
+                  aws:SecureTransport: false
+
+  infra_outputs:
+    - name: S3BucketName
+      Description: Name of the S3 bucket
+      Value:
+        Ref: S3Bucket
+
+    - name: S3BucketArn
+      Description: ARN of the S3 bucket
+      Value:
+        Fn::GetAtt: [S3Bucket, Arn]

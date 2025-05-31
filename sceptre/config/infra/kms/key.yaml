@@ -1,0 +1,60 @@
+---
+template:
+  path: infra.yaml.j2
+
+sceptre_user_data:
+  stack_description: KMS Key for sharing the AMI cross account
+  infra:
+    - name: KMSKey
+      Type: AWS::KMS::Key
+      Properties:
+        Description: KMS Key for sharing the AMI cross account
+        Enabled: true
+        EnableKeyRotation: true
+        KeyPolicy:
+          Version: "2012-10-17"
+          Id: key-permissions
+          Statement:
+            - Sid: Enable IAM User Permissions
+              Effect: Allow
+              Principal:
+                AWS:
+                  Fn::Sub: arn:aws:iam::${AWS::AccountId}:root
+              Action: kms:*
+              Resource: "*"
+            - Sid: Allow use of key by AWS Org
+              Effect: Allow
+              Principal:
+                AWS: "*"
+              Action:
+                - kms:DescribeKey
+                - kms:Encrypt
+                - kms:Decrypt
+                - kms:ReEncrypt
+                - kms:GenerateDataKey*
+                - kms:GenerateDataKeyWithoutPlaintext
+              Resource: "*"
+              Condition:
+                StringEquals:
+                  aws:PrincipalOrgID: "{{ org_id }}"
+        KeySpec: SYMMETRIC_DEFAULT
+        KeyUsage: ENCRYPT_DECRYPT
+        MultiRegion: false
+        Origin: AWS_KMS
+        PendingWindowInDays: 7
+        RotationPeriodInDays: 365
+        # Tags:
+        #   - Tag
+
+    - name: KMSKeyAlias
+      Type: AWS::KMS::Alias
+      Properties:
+        AliasName: alias/ami-bakery-key
+        TargetKeyId:
+          Ref: KMSKey
+
+  infra_outputs:
+    - name: KMSKeyId
+      Description: Id of KMS Key
+      Value:
+        Ref: KMSKey

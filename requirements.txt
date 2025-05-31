@@ -1,0 +1,8 @@
+sceptre
+sceptre-cmd-resolver
+sceptre-s3-packager
+sceptre-ssm-resolver
+awscli
+flake8
+checkov
+bandit
